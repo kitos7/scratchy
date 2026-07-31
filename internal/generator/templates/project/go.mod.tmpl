@@ -1,0 +1,17 @@
+module [[.Module]]
+
+go [[.GoVersion]]
+
+require (
+	github.com/google/wire v0.7.0
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.0
+	github.com/stretchr/testify v1.10.0
+	[[.ScratchModule]] [[.LibVersion]]
+	go.opentelemetry.io/otel v1.34.0
+	google.golang.org/grpc v1.69.4
+	google.golang.org/protobuf v1.36.4
+)
+[[- if .LibReplace]]
+
+replace [[.ScratchModule]] => [[.LibReplace]]
+[[- end]]

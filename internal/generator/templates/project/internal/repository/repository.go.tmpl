@@ -1,0 +1,44 @@
+// Package repository — слой хранения. InMemory — стартовая заглушка,
+// замени на реальное хранилище.
+package repository
+
+import (
+	"context"
+	"sync/atomic"
+
+	"go.opentelemetry.io/otel"
+)
+
+// Repository — контракт хранилища. Для тестов mockery генерирует мок
+// (internal/mocks), который биндится в тестовом wire-контейнере.
+type Repository interface {
+	AddEcho(ctx context.Context, message string) error
+	EchoCount(ctx context.Context) (int64, error)
+}
+
+var tracer = otel.Tracer("repository")
+
+// InMemory — потокобезопасная in-memory-реализация.
+type InMemory struct {
+	count atomic.Int64
+}
+
+// NewInMemory создаёт in-memory-хранилище.
+func NewInMemory() *InMemory { return &InMemory{} }
+
+// AddEcho учитывает обработанное сообщение.
+func (r *InMemory) AddEcho(ctx context.Context, _ string) error {
+	_, span := tracer.Start(ctx, "InMemory.AddEcho")
+	defer span.End()
+
+	r.count.Add(1)
+	return nil
+}
+
+// EchoCount возвращает число обработанных сообщений.
+func (r *InMemory) EchoCount(ctx context.Context) (int64, error) {
+	_, span := tracer.Start(ctx, "InMemory.EchoCount")
+	defer span.End()
+
+	return r.count.Load(), nil
+}

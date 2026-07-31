@@ -1,0 +1,96 @@
+SHELL := /bin/bash
+
+APP_NAME := [[.AppName]]
+BIN_DIR  := $(CURDIR)/bin
+export GOBIN := $(BIN_DIR)
+export PATH  := $(BIN_DIR):$(PATH)
+
+# Версии инструментов (обновляются через `scratch update`)
+BUF_VERSION                := v1.72.0
+PROTOC_GEN_GO_VERSION      := v1.36.4
+PROTOC_GEN_GO_GRPC_VERSION := v1.5.1
+GRPC_GATEWAY_VERSION       := v2.26.0
+WIRE_VERSION               := v0.7.0
+MOCKERY_VERSION            := v2.53.6
+GOLANGCI_LINT_VERSION      := v2.12.2
+
+BREAKING_AGAINST ?= .git\#branch=main
+
+# scratch: заводит файлы ручек по proto (цель handlers). Берём из ./bin,
+# иначе из PATH — в обоих случаях это тот же бинарник генератора.
+# Раскрытие ленивое (`=`, не `:=`): бинарник может появиться в ./bin уже
+# после чтения Makefile — например, в `make bootstrap generate`.
+SCRATCH = $(shell command -v $(BIN_DIR)/scratch 2>/dev/null || command -v scratch 2>/dev/null)
+
+.PHONY: bootstrap
+bootstrap: ## Установить инструменты кодогенерации и линтер в ./bin
+	go install github.com/bufbuild/buf/cmd/buf@$(BUF_VERSION)
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@$(PROTOC_GEN_GO_VERSION)
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@$(PROTOC_GEN_GO_GRPC_VERSION)
+	go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@$(GRPC_GATEWAY_VERSION)
+	go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@$(GRPC_GATEWAY_VERSION)
+	go install github.com/google/wire/cmd/wire@$(WIRE_VERSION)
+	go install github.com/vektra/mockery/v2@$(MOCKERY_VERSION)
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+[[- if .ScratchInstallable]]
+	go install [[.ScratchModule]]/cmd/scratch@[[.ScratchVersion]]
+[[- else if .LibReplace]]
+# Либа подключена через replace и из сети не резолвится — собираем scratch
+# в его собственном модуле (там свои go.mod/go.sum), бинарник — в наш ./bin.
+	cd [[.LibReplace]] && go build -o $(BIN_DIR)/scratch ./cmd/scratch
+[[- else]]
+	@echo "scratch [[.ScratchVersion]] без semver-релиза: собери его локально (make build в go-scratch) и положи в $(BIN_DIR)"
+[[- end]]
+
+.PHONY: generate
+generate: ## Кодогенерация: proto → grpc/gateway/swagger, ручки, зависимости, моки, wire
+	$(BIN_DIR)/buf generate --path api/proto/[[.Package]]
+	$(MAKE) handlers
+	go mod tidy
+	$(BIN_DIR)/mockery
+	$(BIN_DIR)/wire ./internal/...
+
+.PHONY: handlers
+handlers: ## Завести файлы недостающих gRPC-ручек по proto
+	@test -n "$(SCRATCH)" || { echo "scratch не найден: положи бинарник в $(BIN_DIR) или в PATH (см. make bootstrap)"; exit 1; }
+	$(SCRATCH) handlers
+
+.PHONY: build
+build: ## Собрать бинарник в ./bin
+	go build -ldflags '-s -w' -o $(BIN_DIR)/$(APP_NAME) ./cmd/$(APP_NAME)
+
+.PHONY: run
+run: ## Запустить локально
+	APP_NAME=$(APP_NAME) go run ./cmd/$(APP_NAME)
+
+.PHONY: test
+test: ## Юнит-тесты
+	go test -race -count=1 ./...
+
+.PHONY: lint
+lint: ## Линтер Go-кода
+	$(BIN_DIR)/golangci-lint run ./...
+
+.PHONY: lint-proto
+lint-proto: ## Линтер proto-контрактов
+	$(BIN_DIR)/buf lint
+
+.PHONY: breaking
+breaking: ## Проверка ломающих изменений контрактов
+	$(BIN_DIR)/buf breaking --against '$(BREAKING_AGAINST)'
+
+.PHONY: tidy
+tidy:
+	go mod tidy
+
+.PHONY: up
+up: ## docker-compose: приложение + jaeger
+	docker compose up --build -d
+
+.PHONY: down
+down: ## Остановить docker-compose
+	docker compose down -v
+
+.PHONY: help
+help:
+	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "%-12s %s\n", $$1, $$2}'

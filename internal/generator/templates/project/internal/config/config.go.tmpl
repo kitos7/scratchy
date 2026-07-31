@@ -1,0 +1,19 @@
+// Package config — конфигурация сервиса: базовая (scratch) + прикладная.
+package config
+
+import (
+	scratchcfg "[[.ScratchModule]]/pkg/config"
+)
+
+// Config — конфигурация приложения, читается из переменных окружения.
+type Config struct {
+	App scratchcfg.App
+
+	// Greeting — пример прикладной настройки.
+	Greeting string `env:"GREETING" envDefault:"Hello"`
+}
+
+// Load читает конфигурацию из переменных окружения.
+func Load() (*Config, error) {
+	return scratchcfg.Load[Config]()
+}

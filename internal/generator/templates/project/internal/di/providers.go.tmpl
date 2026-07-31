@@ -1,0 +1,28 @@
+// Package di — сборка зависимостей приложения через wire.
+package di
+
+import (
+	"log/slog"
+
+	"google.golang.org/grpc"
+
+	"[[.ScratchModule]]/pkg/app"
+
+	"[[.Module]]/gen"
+	[[.Package]]v1 "[[.Module]]/gen/[[.Package]]/v1"
+	"[[.Module]]/internal/config"
+	"[[.Module]]/internal/server/[[.ServerPkg]]"
+)
+
+// newApp собирает рантайм приложения на scratch-платформе:
+// gRPC + HTTP-gateway + debug-порт (swagger, metrics, healthz, pprof).
+// Новый proto-сервис добавляется сюда: Register…Server + WithGateway.
+func newApp(cfg *config.Config, log *slog.Logger, srv *[[.ServerPkg]].Server) *app.App {
+	return app.New(cfg.App, log,
+		app.WithGRPC(func(s *grpc.Server) {
+			[[.Package]]v1.Register[[.ServiceName]]ServiceServer(s, srv)
+		}),
+		app.WithGateway([[.Package]]v1.Register[[.ServiceName]]ServiceHandler),
+		app.WithSwagger(gen.SwaggerJSON),
+	)
+}

@@ -1,0 +1,11 @@
+// Package gen содержит сгенерированный код (buf generate) и
+// OpenAPI-спецификацию. Не редактируется руками.
+package gen
+
+import _ "embed"
+
+// SwaggerJSON — OpenAPI-спецификация, отдаётся на debug-порте.
+// Файл создаётся командой `make generate`.
+//
+//go:embed api.swagger.json
+var SwaggerJSON []byte

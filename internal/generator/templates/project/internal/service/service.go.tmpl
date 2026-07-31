@@ -1,0 +1,38 @@
+// Package service — бизнес-логика.
+package service
+
+import (
+	"context"
+	"fmt"
+
+	"[[.Module]]/internal/config"
+	"[[.Module]]/internal/repository"
+)
+
+// Service — пример бизнес-логики с зависимостью от хранилища.
+type Service struct {
+	repo     repository.Repository
+	greeting string
+}
+
+// New создаёт Service.
+func New(cfg *config.Config, repo repository.Repository) *Service {
+	return &Service{repo: repo, greeting: cfg.Greeting}
+}
+
+// Echo сохраняет факт запроса и возвращает сообщение с приветствием.
+func (s *Service) Echo(ctx context.Context, message string) (string, error) {
+	if err := s.repo.AddEcho(ctx, message); err != nil {
+		return "", fmt.Errorf("add echo: %w", err)
+	}
+	return fmt.Sprintf("%s, %s!", s.greeting, message), nil
+}
+
+// Stats возвращает количество обработанных Echo.
+func (s *Service) Stats(ctx context.Context) (int64, error) {
+	count, err := s.repo.EchoCount(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("echo count: %w", err)
+	}
+	return count, nil
+}

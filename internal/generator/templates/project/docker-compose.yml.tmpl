@@ -1,0 +1,22 @@
+services:
+  app:
+    build: .
+    container_name: [[.AppName]]
+    ports:
+      - "80:8080"    # HTTP-gateway: сюда ходит Swagger «Try it out»
+      - "9090:9090"  # gRPC
+      - "8081:8081"  # debug: swagger, metrics, healthz, pprof
+    environment:
+      APP_NAME: [[.AppName]]
+      APP_ENV: local
+      TRACING_ENDPOINT: jaeger:4317
+      SWAGGER_TARGET_HOST: localhost  # запросы из Swagger UI идут на порт 80
+    depends_on:
+      - jaeger
+
+  jaeger:
+    image: jaegertracing/jaeger:2.20.0
+    container_name: [[.AppName]]-jaeger
+    ports:
+      - "16686:16686"  # UI: http://localhost:16686
+      - "4317:4317"    # OTLP gRPC

@@ -1,0 +1,10 @@
+# Конфиг mockery: моки интерфейсов для тестового wire-контейнера.
+with-expecter: true
+dir: internal/mocks
+outpkg: mocks
+mockname: "{{.InterfaceName}}"
+filename: "{{.InterfaceName}}.go"
+packages:
+  [[.Module]]/internal/repository:
+    interfaces:
+      Repository:

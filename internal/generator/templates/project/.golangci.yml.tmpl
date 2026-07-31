@@ -1,0 +1,32 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - gocritic
+    - misspell
+    - revive
+    - sloglint
+    - unconvert
+    - unparam
+  exclusions:
+    generated: lax
+    paths:
+      - gen
+      - internal/mocks
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - [[.Module]]
+  exclusions:
+    paths:
+      - gen
+      - internal/mocks

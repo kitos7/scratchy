@@ -1,0 +1,27 @@
+// Package ditest — тестовый контейнер зависимостей: реальные слои + моки.
+package ditest
+
+import (
+	"testing"
+
+	"[[.Module]]/internal/config"
+	"[[.Module]]/internal/mocks"
+	"[[.Module]]/internal/service"
+)
+
+// Env — собранное тестовое окружение: сервис и моки для ожиданий.
+type Env struct {
+	Service *service.Service
+	Repo    *mocks.Repository
+}
+
+// provideConfig — конфигурация по умолчанию для тестов.
+func provideConfig() *config.Config {
+	return &config.Config{Greeting: "Hello"}
+}
+
+// provideRepositoryMock создаёт мок репозитория, привязанный к тесту:
+// неудовлетворённые ожидания провалят тест автоматически.
+func provideRepositoryMock(t *testing.T) *mocks.Repository {
+	return mocks.NewRepository(t)
+}

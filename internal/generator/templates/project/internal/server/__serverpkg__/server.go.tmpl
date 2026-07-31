@@ -1,0 +1,20 @@
+// Package [[.ServerPkg]] — gRPC-транспорт сервиса [[.ServiceName]]Service:
+// одна ручка — один файл (файлы ручек заводит `scratch handlers`).
+package [[.ServerPkg]]
+
+import (
+	[[.Package]]v1 "[[.Module]]/gen/[[.Package]]/v1"
+	"[[.Module]]/internal/service"
+)
+
+// Server реализует [[.ServiceName]]Service.
+type Server struct {
+	[[.Package]]v1.Unimplemented[[.ServiceName]]ServiceServer
+
+	svc *service.Service
+}
+
+// New создаёт gRPC-хендлер сервиса.
+func New(svc *service.Service) *Server {
+	return &Server{svc: svc}
+}

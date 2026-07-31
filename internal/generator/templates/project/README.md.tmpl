@@ -1,0 +1,59 @@
+# [[.AppName]]
+
+Сервис сгенерирован [scratch](https://[[.ScratchModule]]) v[[.ScratchVersion]]: gRPC + HTTP-gateway по proto-контрактам, Swagger на debug-порте, OpenTelemetry-трассировка, wire-DI, docker-compose.
+
+## Быстрый старт
+
+```bash
+make bootstrap   # инструменты (buf, wire, mockery, golangci-lint) в ./bin
+make generate    # кодогенерация: proto → grpc/gateway/swagger, моки, wire
+make test        # тесты
+make run         # локальный запуск
+make up          # docker-compose: приложение + jaeger
+```
+
+После первого `make generate` закоммить `gen/` и `internal/mocks/` — CI проверяет, что сгенерированный код актуален (`git diff --exit-code`).
+
+## Порты
+
+| Порт | Что | Где смотреть |
+|---|---|---|
+| 80 → 8080 | HTTP-gateway (REST) | `curl localhost:80/v1/echo` |
+| 9090 | gRPC (+ reflection) | `grpcurl -plaintext localhost:9090 list` |
+| 8081 | Debug: Swagger UI, /metrics, /healthz, /readyz, /debug/pprof | http://localhost:8081/swagger/ |
+| 16686 | Jaeger UI (трейсы) | http://localhost:16686 |
+
+Swagger UI живёт на debug-порте (8081), а запросы «Try it out» шлёт на публичный HTTP-порт — в docker-compose это порт 80 (`SWAGGER_TARGET_HOST=localhost`), при локальном `make run` — `localhost:8080`.
+
+## Структура
+
+```
+api/proto/          proto-контракты (+ вендоренные google/api)
+gen/                сгенерированный код: pb, grpc, gateway, swagger (не править)
+cmd/[[.AppName]]/   main: конфиг → логгер → трейсинг → DI → Run
+internal/
+  config/           конфигурация (env), встраивает базовую scratch-конфигурацию
+  server/           gRPC-транспорт: пакет на proto-сервис, файл на ручку
+    [[.ServerPkg]]/  server.go (тип Server + New) и по файлу на каждый rpc
+  service/          бизнес-логика
+  repository/       слой хранения (in-memory заглушка)
+  di/               прод-контейнер wire
+  di/ditest/        тестовый контейнер wire (сервис на моках)
+  mocks/            моки mockery (генерируются)
+```
+
+## Новые ручки и сервисы
+
+Добавь rpc (или целый `service`) в `api/proto/[[.Package]]/v1/*.proto` и запусти `make generate` — шаг `scratch handlers` заведёт файл-заготовку на каждую новую ручку: `internal/server/<сервис>/<rpc>.go` со стабом `codes.Unimplemented`. Существующие файлы никогда не перезаписываются, метод считается реализованным, если он есть где угодно в пакете сервиса.
+
+Для нового proto-сервиса создаётся ещё и `server.go` (тип `Server` + `New`), но регистрацию в DI нужно дописать руками — команда печатает готовый сниппет для `internal/di/providers.go` и `internal/di/wire.go`, после чего `make generate` пересоберёт wire.
+
+Ограничение: rpc, у которого запрос или ответ объявлен в другом proto-пакете, пропускается с предупреждением — такую ручку заводи вручную.
+
+## Как это обновляется
+
+Файлы тулинга (Makefile, buf.*, .golangci.yml, Dockerfile, docker-compose.yml, CI) — managed: команда `scratch update` обновляет их до шаблонов новой версии scratch и поднимает версию платформенной либы в go.mod. Изменённые руками файлы не перезаписываются — новая версия кладётся рядом с суффиксом `.scratch-new`. Код приложения scratch не трогает. Параметры генерации хранятся в `.scratch.yaml`.
+[[- if .LibReplace]]
+
+> В go.mod стоит `replace [[.ScratchModule]] => [[.LibReplace]]` для локальной разработки платформенной либы. Убери его, когда либа будет опубликована с semver-тегом.
+[[- end]]

@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package [[.Package]].v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "[[.Module]]/gen/[[.Package]]/v1;[[.Package]]v1";
+
+// [[.ServiceName]]Service — пример сервиса. Замени методы на свои.
+service [[.ServiceName]]Service {
+  // Echo сохраняет сообщение и возвращает его с приветствием из конфига.
+  rpc Echo(EchoRequest) returns (EchoResponse) {
+    option (google.api.http) = {
+      post: "/v1/echo"
+      body: "*"
+    };
+  }
+
+  // Stats возвращает количество обработанных Echo-запросов.
+  rpc Stats(StatsRequest) returns (StatsResponse) {
+    option (google.api.http) = {get: "/v1/stats"};
+  }
+}
+
+message EchoRequest {
+  string message = 1;
+}
+
+message EchoResponse {
+  string message = 1;
+}
+
+message StatsRequest {}
+
+message StatsResponse {
+  int64 echo_count = 1;
+}

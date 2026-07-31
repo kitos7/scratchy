@@ -1,0 +1,19 @@
+package [[.ServerPkg]]
+
+import (
+	"context"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	[[.Package]]v1 "[[.Module]]/gen/[[.Package]]/v1"
+)
+
+// Stats возвращает статистику сервиса.
+func (s *Server) Stats(ctx context.Context, _ *[[.Package]]v1.StatsRequest) (*[[.Package]]v1.StatsResponse, error) {
+	count, err := s.svc.Stats(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	return &[[.Package]]v1.StatsResponse{EchoCount: count}, nil
+}

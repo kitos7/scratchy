@@ -1,0 +1,44 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Tools
+        run: make bootstrap
+
+      - name: Generate
+        run: make generate
+
+      - name: Check generated code is committed
+        run: git diff --exit-code
+
+      - name: Lint
+        run: make lint
+
+      - name: Proto lint
+        run: make lint-proto
+
+      - name: Proto breaking changes
+        if: github.event_name == 'pull_request'
+        run: make breaking BREAKING_AGAINST='.git#ref=origin/${{ github.base_ref }}'
+
+      - name: Test
+        run: make test
+
+      - name: Build
+        run: make build

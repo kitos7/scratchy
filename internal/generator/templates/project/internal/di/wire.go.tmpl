@@ -1,0 +1,31 @@
+//go:build wireinject
+// +build wireinject
+
+// Package di — прод-контейнер зависимостей (google/wire).
+// После изменения провайдеров запусти `make generate`.
+package di
+
+import (
+	"log/slog"
+
+	"github.com/google/wire"
+
+	"[[.ScratchModule]]/pkg/app"
+
+	"[[.Module]]/internal/config"
+	"[[.Module]]/internal/repository"
+	"[[.Module]]/internal/server/[[.ServerPkg]]"
+	"[[.Module]]/internal/service"
+)
+
+// InitApp собирает приложение со всеми зависимостями.
+func InitApp(cfg *config.Config, log *slog.Logger) *app.App {
+	wire.Build(
+		repository.NewInMemory,
+		wire.Bind(new(repository.Repository), new(*repository.InMemory)),
+		service.New,
+		[[.ServerPkg]].New,
+		newApp,
+	)
+	return nil
+}

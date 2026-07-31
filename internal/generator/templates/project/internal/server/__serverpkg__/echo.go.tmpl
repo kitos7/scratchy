@@ -1,0 +1,23 @@
+package [[.ServerPkg]]
+
+import (
+	"context"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	[[.Package]]v1 "[[.Module]]/gen/[[.Package]]/v1"
+)
+
+// Echo валидирует запрос и делегирует бизнес-логике.
+func (s *Server) Echo(ctx context.Context, req *[[.Package]]v1.EchoRequest) (*[[.Package]]v1.EchoResponse, error) {
+	if req.GetMessage() == "" {
+		return nil, status.Error(codes.InvalidArgument, "message is required")
+	}
+
+	msg, err := s.svc.Echo(ctx, req.GetMessage())
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	return &[[.Package]]v1.EchoResponse{Message: msg}, nil
+}

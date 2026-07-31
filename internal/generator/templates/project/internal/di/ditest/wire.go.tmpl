@@ -1,0 +1,28 @@
+//go:build wireinject
+// +build wireinject
+
+// Package ditest — тестовый контейнер зависимостей: вместо реальных
+// реализаций биндятся моки (mockery), доступные тесту для ожиданий.
+package ditest
+
+import (
+	"testing"
+
+	"github.com/google/wire"
+
+	"[[.Module]]/internal/mocks"
+	"[[.Module]]/internal/repository"
+	"[[.Module]]/internal/service"
+)
+
+// InitTestEnv собирает тестовое окружение с моками.
+func InitTestEnv(t *testing.T) *Env {
+	wire.Build(
+		provideConfig,
+		provideRepositoryMock,
+		wire.Bind(new(repository.Repository), new(*mocks.Repository)),
+		service.New,
+		wire.Struct(new(Env), "*"),
+	)
+	return nil
+}
