@@ -22,6 +22,7 @@ type App struct {
 
 	Log     Log
 	Tracing Tracing
+	Metrics Metrics
 	Swagger Swagger
 }
 
@@ -40,6 +41,13 @@ type Tracing struct {
 	Endpoint    string  `env:"TRACING_ENDPOINT" envDefault:"localhost:4317"`
 	Insecure    bool    `env:"TRACING_INSECURE" envDefault:"true"`
 	SampleRatio float64 `env:"TRACING_SAMPLE_RATIO" envDefault:"1.0"`
+}
+
+// Metrics — настройки метрик. Экспорт идёт в prometheus-registry, который
+// отдаёт /metrics на debug-порте; выключение оставляет там только
+// стандартные метрики Go-рантайма.
+type Metrics struct {
+	Enabled bool `env:"METRICS_ENABLED" envDefault:"true"`
 }
 
 // Swagger — настройки Swagger UI на debug-порте.

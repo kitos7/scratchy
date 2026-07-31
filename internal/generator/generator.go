@@ -30,6 +30,7 @@ var managedFiles = map[string]bool{
 	".golangci.yml":            true,
 	".mockery.yaml":            true,
 	"Dockerfile":               true,
+	".dockerignore":            true,
 	"docker-compose.yml":       true,
 	".github/workflows/ci.yml": true,
 	".gitignore":               true,

@@ -1,10 +1,17 @@
 package generator
 
 import (
+	"bytes"
+	"go/format"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func testParams(t *testing.T) Params {
@@ -37,6 +44,49 @@ func TestNewParams_Derivation(t *testing.T) {
 
 	if _, err := NewParams("no spaces allowed", "", "", "", "dev"); err == nil {
 		t.Error("ожидалась ошибка на некорректном module path")
+	}
+}
+
+// TestGoCamelCase сверяет воспроизведённые правила protoc-gen-go.
+// Ключевой случай — буква после цифры: из-за него имя сервиса, объявленное
+// в proto, и имя в сгенерированном Go-коде могут разойтись, и проект
+// перестанет собираться.
+func TestGoCamelCase(t *testing.T) {
+	cases := map[string]string{
+		"e2edemo":       "E2Edemo",
+		"demo":          "Demo",
+		"demo_api":      "DemoApi",
+		"DemoService":   "DemoService",
+		"s3proxy":       "S3Proxy",
+		"oauth2server":  "Oauth2Server",
+		"v2":            "V2",
+		"EchoRequest":   "EchoRequest",
+		"echo_request":  "EchoRequest",
+		"_leading":      "XLeading",
+		"pkg.message":   "PkgMessage",
+		"pkg.Message":   "Pkg_Message",
+		"DemoServiceV2": "DemoServiceV2",
+		"":              "",
+	}
+	for in, want := range cases {
+		if got := GoCamelCase(in); got != want {
+			t.Errorf("GoCamelCase(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// Имя сервиса должно быть неподвижной точкой GoCamelCase: одно и то же
+// имя идёт и в proto, и в Go-код шаблонов.
+func TestServiceName_IsGoCamelCaseFixedPoint(t *testing.T) {
+	for _, appName := range []string{"demo", "demo-api", "e2edemo", "s3proxy", "oauth2server", "my-long-name"} {
+		svc := serviceName(appName)
+		if got := GoCamelCase(svc); got != svc {
+			t.Errorf("serviceName(%q) = %q, но GoCamelCase(%q) = %q — proto и Go-код разойдутся",
+				appName, svc, svc, got)
+		}
+		if got := GoCamelCase(svc + "Service"); got != svc+"Service" {
+			t.Errorf("%qService манглится в %q — ссылки на Unimplemented/Register сломаются", svc, got)
+		}
 	}
 }
 
@@ -136,6 +186,7 @@ func TestRender_AllTemplates(t *testing.T) {
 		".golangci.yml",
 		".mockery.yaml",
 		"Dockerfile",
+		".dockerignore",
 		"docker-compose.yml",
 		".github/workflows/ci.yml",
 		"api/proto/demoapi/v1/service.proto",
@@ -148,7 +199,9 @@ func TestRender_AllTemplates(t *testing.T) {
 		"internal/di/providers.go",
 		"internal/di/ditest/wire.go",
 		"internal/di/ditest/providers.go",
-		"internal/mocks/Repository.go",
+		// Пакет-заглушка: без него go mod tidy в make generate уходит
+		// искать <module>/internal/mocks в сети (mockery ещё не запускался).
+		"internal/mocks/doc.go",
 		"internal/repository/repository.go",
 		"internal/server/demoapiservice/server.go",
 		"internal/server/demoapiservice/echo.go",
@@ -191,6 +244,80 @@ func TestRender_AllTemplates(t *testing.T) {
 	// бинарник появляется в ./bin уже после чтения Makefile.
 	if strings.Contains(string(files["Makefile"]), "SCRATCH :=") {
 		t.Error("Makefile: SCRATCH := раскрывается на парсинге — make bootstrap generate не найдёт бинарник")
+	}
+
+	// .dockerignore обязан выкинуть ./bin (после bootstrap там сотни мегабайт
+	// инструментов) и обязан НЕ выкинуть gen/ — Dockerfile не генерирует код.
+	dockerignore := string(files[".dockerignore"])
+	if !strings.Contains(dockerignore, "bin/") {
+		t.Errorf(".dockerignore: ./bin не исключён — инструменты уедут в build context:\n%s", dockerignore)
+	}
+	for line := range strings.SplitSeq(dockerignore, "\n") {
+		if s := strings.TrimSpace(line); s == "gen" || s == "gen/" {
+			t.Error(".dockerignore: gen/ исключён — сборка в Docker не найдёт сгенерированный код")
+		}
+	}
+}
+
+// TestRender_GoFilesAreValid: раньше проверялось только наличие файлов и
+// отсутствие незаменённых плейсхолдеров — опечатка в шаблоне доезжала до
+// пользователя. Парсер ловит её мгновенно и без сети.
+func TestRender_GoFilesAreValid(t *testing.T) {
+	files, err := Render(testParams(t))
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+
+	checked := 0
+	for name, content := range files {
+		if !strings.HasSuffix(name, ".go") {
+			continue
+		}
+		checked++
+
+		if _, err := parser.ParseFile(token.NewFileSet(), name, content, parser.SkipObjectResolution); err != nil {
+			t.Errorf("%s: не разбирается как Go-код: %v", name, err)
+			continue
+		}
+
+		formatted, err := format.Source(content)
+		if err != nil {
+			t.Errorf("%s: gofmt не смог обработать: %v", name, err)
+			continue
+		}
+		if !bytes.Equal(formatted, content) {
+			t.Errorf("%s: шаблон рендерится в неотформатированный код (нарушит `make lint` в проекте)", name)
+		}
+	}
+
+	if checked == 0 {
+		t.Fatal("не проверено ни одного .go — тест ничего не гарантирует")
+	}
+}
+
+// TestRender_YAMLIsValid: сломанный отступ в шаблоне YAML иначе всплывёт
+// только при запуске buf/mockery/docker в чужом проекте.
+func TestRender_YAMLIsValid(t *testing.T) {
+	files, err := Render(testParams(t))
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+
+	checked := 0
+	for name, content := range files {
+		if !strings.HasSuffix(name, ".yml") && !strings.HasSuffix(name, ".yaml") {
+			continue
+		}
+		checked++
+
+		var doc any
+		if err := yaml.Unmarshal(content, &doc); err != nil {
+			t.Errorf("%s: невалидный YAML: %v", name, err)
+		}
+	}
+
+	if checked == 0 {
+		t.Fatal("не проверено ни одного YAML — тест ничего не гарантирует")
 	}
 }
 
@@ -249,5 +376,83 @@ func TestGenerateAndUpdate(t *testing.T) {
 	}
 	if m.ScratchVersion != "v0.4.0" {
 		t.Errorf("manifest.ScratchVersion = %q, want v0.4.0", m.ScratchVersion)
+	}
+}
+
+// TestUpdate_ReplaceOverridesBump: при живом replace бамп require ничего не
+// меняет для сборки — отчёт не должен заявлять обновление либы состоявшимся.
+func TestUpdate_ReplaceOverridesBump(t *testing.T) {
+	dir := t.TempDir()
+	// testParams уже с --lib-replace ../.., то есть replace попадёт в go.mod.
+	if _, err := Generate(dir, testParams(t), false); err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	report, err := Update(dir, "v0.4.0")
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	if report.LibBumped {
+		t.Error("LibBumped = true при живом replace: отчёт заявляет обновление, которого сборка не увидит")
+	}
+	if !slices.ContainsFunc(report.Warnings, func(w string) bool { return strings.Contains(w, "replace") }) {
+		t.Errorf("нет предупреждения про replace: %v", report.Warnings)
+	}
+
+	// require при этом всё равно поднимается — чтобы после снятия replace
+	// проект оказался на новой версии.
+	gomod, err := os.ReadFile(filepath.Join(dir, "go.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(gomod), ScratchModule+" v0.4.0") {
+		t.Errorf("require не поднят:\n%s", gomod)
+	}
+
+	// Без replace то же обновление проходит как состоявшееся.
+	noReplace := t.TempDir()
+	p := testParams(t)
+	p.LibReplace = ""
+	if _, err := Generate(noReplace, p, false); err != nil {
+		t.Fatalf("Generate без replace: %v", err)
+	}
+	report, err = Update(noReplace, "v0.4.0")
+	if err != nil {
+		t.Fatalf("Update без replace: %v", err)
+	}
+	if !report.LibBumped {
+		t.Errorf("LibBumped = false без replace, warnings: %v", report.Warnings)
+	}
+}
+
+// TestLoadManifest_FutureSchema: манифест новее бинарника — внятная ошибка,
+// а не молчаливая работа по чужой структуре.
+func TestLoadManifest_FutureSchema(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := Generate(dir, testParams(t), false); err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	m, err := LoadManifest(dir)
+	if err != nil {
+		t.Fatalf("LoadManifest: %v", err)
+	}
+	m.Schema = currentSchema + 1
+	if err := m.Save(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = LoadManifest(dir)
+	if err == nil {
+		t.Fatal("ожидалась ошибка на манифесте будущей схемы")
+	}
+	if !strings.Contains(err.Error(), "schema") {
+		t.Errorf("ошибка не объясняет причину: %v", err)
+	}
+
+	// Через Update та же ошибка должна доходить до пользователя.
+	if _, err := Update(dir, "v0.4.0"); err == nil {
+		t.Error("Update отработал на манифесте будущей схемы")
 	}
 }

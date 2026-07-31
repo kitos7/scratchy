@@ -78,7 +78,8 @@ func generateService(dir, module string, svc Service, report *Report) error {
 
 	for _, rpc := range svc.RPCs {
 		switch {
-		case implemented[rpc.Name]:
+		// Сверяем по Go-имени: именно так метод называется в коде.
+		case implemented[rpc.GoName]:
 			report.Existing = append(report.Existing, svc.Name+"."+rpc.Name)
 			continue
 		case rpc.Foreign:
@@ -88,7 +89,7 @@ func generateService(dir, module string, svc Service, report *Report) error {
 			continue
 		}
 
-		target := filepath.Join(pkgDir, fileName(rpc.Name))
+		target := filepath.Join(pkgDir, fileName(rpc.GoName))
 		if _, err := os.Stat(target); err == nil {
 			report.Warnings = append(report.Warnings, fmt.Sprintf(
 				"%s.%s: файл %s уже есть, но метода в пакете нет — допиши ручку вручную",
@@ -159,7 +160,7 @@ func DIHint(svc Service) string {
     в app.WithGRPC:      %s.Register%sServer(s, %sSrv)
     рядом с опциями:     app.WithGateway(%s.Register%sHandler),
   internal/di/wire.go — в wire.Build: %s.New`,
-		svc.Pkg, svc.Pkg, svc.Alias, svc.Name, svc.Pkg, svc.Alias, svc.Name, svc.Pkg)
+		svc.Pkg, svc.Pkg, svc.Alias, svc.GoName, svc.Pkg, svc.Alias, svc.GoName, svc.Pkg)
 }
 
 // Sorted возвращает предупреждения в стабильном порядке.

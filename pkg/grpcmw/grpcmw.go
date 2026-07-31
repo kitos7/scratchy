@@ -1,4 +1,6 @@
-// Package grpcmw — базовые unary-интерсепторы: логирование и recovery.
+// Package grpcmw — базовые интерсепторы: логирование и recovery.
+// Каждый есть в двух видах — unary и stream: `scratch handlers` умеет
+// заводить стриминговые ручки, и они должны быть защищены так же.
 package grpcmw
 
 import (
@@ -35,19 +37,77 @@ func Logging(log *slog.Logger) grpc.UnaryServerInterceptor {
 	}
 }
 
-// Recovery перехватывает паники в хендлерах и возвращает codes.Internal.
+// LoggingStream логирует стриминговый вызов: метод, вид стрима, код,
+// длительность. Запись делается по завершении вызова, а не на каждое
+// сообщение — иначе долгий стрим зальёт лог.
+func LoggingStream(log *slog.Logger) grpc.StreamServerInterceptor {
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		start := time.Now()
+		err := handler(srv, ss)
+
+		ctx := ss.Context()
+		attrs := []slog.Attr{
+			slog.String("method", info.FullMethod),
+			slog.String("stream", streamKind(info)),
+			slog.String("code", status.Code(err).String()),
+			slog.Duration("duration", time.Since(start)),
+		}
+		lvl := slog.LevelInfo
+		if err != nil {
+			lvl = slog.LevelError
+			attrs = append(attrs, slog.String("error", err.Error()))
+		}
+		log.LogAttrs(ctx, lvl, "grpc stream", attrs...)
+
+		return err
+	}
+}
+
+// streamKind описывает вид стрима для лога.
+func streamKind(info *grpc.StreamServerInfo) string {
+	switch {
+	case info.IsClientStream && info.IsServerStream:
+		return "bidi"
+	case info.IsClientStream:
+		return "client"
+	case info.IsServerStream:
+		return "server"
+	default:
+		return "unary"
+	}
+}
+
+// Recovery перехватывает паники в unary-хендлерах и возвращает codes.Internal.
 func Recovery(log *slog.Logger) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 		defer func() {
 			if r := recover(); r != nil {
-				log.LogAttrs(ctx, slog.LevelError, "panic recovered",
-					slog.String("method", info.FullMethod),
-					slog.Any("panic", r),
-					slog.String("stack", string(debug.Stack())),
-				)
+				logPanic(ctx, log, info.FullMethod, r)
 				err = status.Error(codes.Internal, "internal server error")
 			}
 		}()
 		return handler(ctx, req)
 	}
+}
+
+// RecoveryStream перехватывает паники в стриминговых хендлерах.
+// Без него паника в стрим-ручке роняет весь процесс.
+func RecoveryStream(log *slog.Logger) grpc.StreamServerInterceptor {
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				logPanic(ss.Context(), log, info.FullMethod, r)
+				err = status.Error(codes.Internal, "internal server error")
+			}
+		}()
+		return handler(srv, ss)
+	}
+}
+
+func logPanic(ctx context.Context, log *slog.Logger, method string, r any) {
+	log.LogAttrs(ctx, slog.LevelError, "panic recovered",
+		slog.String("method", method),
+		slog.Any("panic", r),
+		slog.String("stack", string(debug.Stack())),
+	)
 }

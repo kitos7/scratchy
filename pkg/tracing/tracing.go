@@ -7,12 +7,11 @@ import (
 	"fmt"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
+	"github.com/nikita/scratch/internal/otelres"
 	"github.com/nikita/scratch/pkg/config"
 )
 
@@ -41,12 +40,9 @@ func Init(ctx context.Context, serviceName, environment string, cfg config.Traci
 		return nil, fmt.Errorf("create otlp exporter: %w", err)
 	}
 
-	res, err := resource.Merge(resource.Default(), resource.NewSchemaless(
-		attribute.String("service.name", serviceName),
-		attribute.String("deployment.environment", environment),
-	))
+	res, err := otelres.New(serviceName, environment)
 	if err != nil {
-		return nil, fmt.Errorf("build resource: %w", err)
+		return nil, err
 	}
 
 	tp := sdktrace.NewTracerProvider(

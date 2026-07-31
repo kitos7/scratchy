@@ -18,6 +18,9 @@ import (
 type Service struct {
 	// Name — имя сервиса из proto (DemoService).
 	Name string
+	// GoName — как это имя выглядит в сгенерированном Go-коде: protoc-gen-go
+	// мангли́т proto-имена, и ссылаться в коде надо именно на этот вариант.
+	GoName string
 	// Pkg — Go-пакет транспорта (demoservice).
 	Pkg string
 	// ImportPath — импорт сгенерированного pb-пакета.
@@ -32,10 +35,16 @@ type Service struct {
 
 // RPC — одна ручка сервиса.
 type RPC struct {
+	// Name — имя rpc из proto.
 	Name string
-	// Request/Response — Go-имена типов сообщений без пакета.
+	// GoName — имя метода в сгенерированном Go-коде.
+	GoName string
+	// Request/Response — имена типов сообщений из proto, без пакета.
 	Request  string
 	Response string
+	// GoRequest/GoResponse — те же типы, как их назвал protoc-gen-go.
+	GoRequest  string
+	GoResponse string
 	// StreamRequest/StreamResponse — флаги стриминга.
 	StreamRequest  bool
 	StreamResponse bool
@@ -107,6 +116,7 @@ func parseFile(dir, path string) ([]Service, error) {
 		protoparse.WithService(func(s *protoparse.Service) {
 			svc := Service{
 				Name:      s.Name,
+				GoName:    generator.GoCamelCase(s.Name),
 				Pkg:       generator.ServerPackage(s.Name),
 				ProtoFile: filepath.ToSlash(rel),
 			}
@@ -115,13 +125,17 @@ func parseFile(dir, path string) ([]Service, error) {
 				if !ok {
 					continue
 				}
+				foreign := strings.Contains(rpc.RequestType, ".") || strings.Contains(rpc.ReturnsType, ".")
 				svc.RPCs = append(svc.RPCs, RPC{
 					Name:           rpc.Name,
+					GoName:         generator.GoCamelCase(rpc.Name),
 					Request:        rpc.RequestType,
 					Response:       rpc.ReturnsType,
+					GoRequest:      generator.GoCamelCase(rpc.RequestType),
+					GoResponse:     generator.GoCamelCase(rpc.ReturnsType),
 					StreamRequest:  rpc.StreamsRequest,
 					StreamResponse: rpc.StreamsReturns,
-					Foreign:        strings.Contains(rpc.RequestType, ".") || strings.Contains(rpc.ReturnsType, "."),
+					Foreign:        foreign,
 				})
 			}
 			services = append(services, svc)

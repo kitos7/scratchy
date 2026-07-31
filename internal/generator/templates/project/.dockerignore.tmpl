@@ -1,0 +1,33 @@
+# Что не нужно в build context. Главное — ./bin: после `make bootstrap` там
+# лежат buf, protoc-плагины, wire, mockery и линтер (сотни мегабайт), плюс
+# собранный под хост бинарник приложения, который не должен попасть в образ.
+bin/
+dist/
+
+.git/
+.github/
+.gitignore
+.dockerignore
+
+.idea/
+.vscode/
+.DS_Store
+
+# Тулинг и документация: в сборке не участвуют.
+Makefile
+Dockerfile
+docker-compose.yml
+buf.yaml
+buf.gen.yaml
+.golangci.yml
+.mockery.yaml
+.scratch.yaml
+*.md
+*.scratch-new
+
+.env
+*.test
+coverage.out
+
+# gen/ НЕ исключаем: Dockerfile не запускает buf generate и рассчитывает
+# на закоммиченный сгенерированный код (см. README проекта).

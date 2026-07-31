@@ -135,7 +135,30 @@ func bumpLibVersion(dir, scratchVersion string) (bool, string) {
 	if err := os.WriteFile(gomodPath, out, 0o644); err != nil {
 		return false, fmt.Sprintf("go.mod не записан: %v", err)
 	}
+
+	// require поднят, но replace перекрывает версию: сборка возьмёт код из
+	// локальной копии, а не из тега. Молчать об этом нельзя — иначе отчёт
+	// заявляет обновление либы, которого не произошло.
+	if path := replacementPath(mf); path != "" {
+		return false, fmt.Sprintf("require %s поднят до %s, но replace на %s перекрывает версию — либа придёт из локальной копии, а не из тега",
+			ScratchModule, scratchVersion, path)
+	}
 	return true, ""
+}
+
+// replacementPath возвращает цель replace-директивы для платформенной либы
+// или пустую строку, если её не заменяют.
+func replacementPath(mf *modfile.File) string {
+	for _, r := range mf.Replace {
+		if r.Old.Path != ScratchModule {
+			continue
+		}
+		if r.New.Version != "" {
+			return r.New.Path + "@" + r.New.Version
+		}
+		return r.New.Path
+	}
+	return ""
 }
 
 func writeFile(full string, content []byte) error {

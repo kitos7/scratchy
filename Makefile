@@ -16,12 +16,33 @@ install: ## Установить scratch в GOBIN
 
 .PHONY: test
 test: ## Юнит-тесты
-	go test -race -count=1 ./...
+	go test -race -count=1 -cover ./...
+
+.PHONY: e2e
+e2e: ## Сквозной тест: сгенерированный проект собирается (нужна сеть, минуты)
+	go test -tags e2e -count=1 -timeout 30m -v ./internal/generator/
+
+.PHONY: tools
+tools: $(BIN_DIR)/golangci-lint ## Инструменты в ./bin
+
+$(BIN_DIR)/golangci-lint:
+	GOBIN=$(BIN_DIR) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
 .PHONY: lint
-lint: ## Линтер (требует golangci-lint)
-	GOBIN=$(BIN_DIR) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+lint: $(BIN_DIR)/golangci-lint ## Линтер
 	$(BIN_DIR)/golangci-lint run ./...
+
+.PHONY: fmt-check
+fmt-check: ## Проверить форматирование
+	@out="$$(gofmt -l .)"; \
+	if [ -n "$$out" ]; then echo "gofmt требуется в:"; echo "$$out"; exit 1; fi
+
+.PHONY: check
+check: fmt-check vet test lint ## Всё, что должно быть зелёным перед коммитом
+
+.PHONY: vet
+vet: ## go vet
+	go vet ./...
 
 .PHONY: tidy
 tidy:

@@ -14,8 +14,6 @@ linters:
     - unparam
   exclusions:
     generated: lax
-    paths:
-      - internal/generator/templates
 
 formatters:
   enable:

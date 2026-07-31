@@ -42,7 +42,12 @@ type App struct {
 	grpcRegs    []GRPCRegistrar
 	gatewayRegs []GatewayRegistrar
 	swaggerJSON []byte
+
 	extraUnary  []grpc.UnaryServerInterceptor
+	extraStream []grpc.StreamServerInterceptor
+
+	gatewayOpts    []runtime.ServeMuxOption
+	httpMiddleware []func(http.Handler) http.Handler
 }
 
 // New собирает приложение из конфигурации и опций.
@@ -60,13 +65,20 @@ func (a *App) Run(ctx context.Context) error {
 	defer stop()
 
 	// gRPC-сервер: трассировка через stats handler, recovery + логирование.
-	interceptors := make([]grpc.UnaryServerInterceptor, 0, 2+len(a.extraUnary))
-	interceptors = append(interceptors, grpcmw.Recovery(a.log), grpcmw.Logging(a.log))
-	interceptors = append(interceptors, a.extraUnary...)
+	// Стримы прикрыты той же парой: `scratch handlers` заводит стрим-ручки,
+	// и паника в них не должна ронять процесс.
+	unary := make([]grpc.UnaryServerInterceptor, 0, 2+len(a.extraUnary))
+	unary = append(unary, grpcmw.Recovery(a.log), grpcmw.Logging(a.log))
+	unary = append(unary, a.extraUnary...)
+
+	stream := make([]grpc.StreamServerInterceptor, 0, 2+len(a.extraStream))
+	stream = append(stream, grpcmw.RecoveryStream(a.log), grpcmw.LoggingStream(a.log))
+	stream = append(stream, a.extraStream...)
 
 	grpcServer := grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
-		grpc.ChainUnaryInterceptor(interceptors...),
+		grpc.ChainUnaryInterceptor(unary...),
+		grpc.ChainStreamInterceptor(stream...),
 	)
 	for _, register := range a.grpcRegs {
 		register(grpcServer)
@@ -89,16 +101,23 @@ func (a *App) Run(ctx context.Context) error {
 	}
 	defer func() { _ = conn.Close() }()
 
-	gatewayMux := runtime.NewServeMux()
+	gatewayMux := runtime.NewServeMux(a.gatewayOpts...)
 	for _, register := range a.gatewayRegs {
 		if err := register(ctx, gatewayMux, conn); err != nil {
 			return fmt.Errorf("register gateway handler: %w", err)
 		}
 	}
 
+	// Middleware внутри otelhttp: спан уже создан, значит логи из middleware
+	// получают trace_id. Первый добавленный — самый внешний.
+	var gatewayHandler http.Handler = gatewayMux
+	for i := len(a.httpMiddleware) - 1; i >= 0; i-- {
+		gatewayHandler = a.httpMiddleware[i](gatewayHandler)
+	}
+
 	httpServer := &http.Server{
 		Addr:              fmt.Sprintf(":%d", a.cfg.HTTPPort),
-		Handler:           otelhttp.NewHandler(gatewayMux, "http.gateway"),
+		Handler:           otelhttp.NewHandler(gatewayHandler, "http.gateway"),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

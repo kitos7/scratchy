@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"[[.ScratchModule]]/pkg/logging"
+	"[[.ScratchModule]]/pkg/metrics"
 	"[[.ScratchModule]]/pkg/tracing"
 
 	"[[.Module]]/internal/config"
@@ -35,6 +36,14 @@ func run() error {
 		return fmt.Errorf("init tracing: %w", err)
 	}
 	defer func() { _ = shutdownTracing(context.Background()) }()
+
+	// Задаёт MeterProvider: otelgrpc/otelhttp в рантайме начинают отдавать
+	// метрики RPC на debug-порт (/metrics).
+	shutdownMetrics, err := metrics.Init(cfg.App.Name, cfg.App.Environment, cfg.App.Metrics)
+	if err != nil {
+		return fmt.Errorf("init metrics: %w", err)
+	}
+	defer func() { _ = shutdownMetrics(context.Background()) }()
 
 	application := di.InitApp(cfg, log)
 

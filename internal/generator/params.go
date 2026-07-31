@@ -115,13 +115,51 @@ func ServerPackage(protoService string) string {
 	return b.String()
 }
 
-// serviceName превращает kebab-case в PascalCase: my-service → MyService.
+// serviceName превращает имя приложения в имя proto-сервиса:
+// my-service → MyService, e2edemo → E2Edemo.
+//
+// Имя обязано быть неподвижной точкой GoCamelCase: то же имя объявляется
+// в proto и подставляется в Go-код шаблонов, а protoc-gen-go мангли́т
+// proto-имена по своим правилам. Разойдись они — сгенерированный проект
+// не соберётся (ссылки на Unimplemented<Name>Server и Register<Name>Server).
 func serviceName(name string) string {
-	parts := strings.FieldsFunc(name, func(r rune) bool { return r == '-' || r == '_' })
-	var b strings.Builder
-	for _, p := range parts {
-		b.WriteString(strings.ToUpper(p[:1]))
-		b.WriteString(p[1:])
-	}
-	return b.String()
+	return GoCamelCase(strings.ReplaceAll(name, "-", "_"))
 }
+
+// GoCamelCase повторяет правила protoc-gen-go (protobuf-go strs.GoCamelCase):
+// по ним имена из proto превращаются в идентификаторы сгенерированного
+// Go-кода. Пакет с оригиналом внутренний, поэтому алгоритм воспроизведён:
+// "_" перед буквой поднимает её регистр, "." становится "_", а буква сразу
+// после цифры тоже поднимается — из-за последнего "e2edemo" даёт "E2Edemo".
+func GoCamelCase(s string) string {
+	var b []byte
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c == '.' && i+1 < len(s) && isASCIILower(s[i+1]):
+			// Точка перед строчной буквой съедается: буква станет заглавной.
+		case c == '.':
+			b = append(b, '_')
+		case c == '_' && (i == 0 || s[i-1] == '.'):
+			// Идентификатор не может начинаться с подчёркивания.
+			b = append(b, 'X')
+		case c == '_' && i+1 < len(s) && isASCIILower(s[i+1]):
+			// Подчёркивание съедается: следующая буква станет заглавной.
+		case isASCIIDigit(c):
+			b = append(b, c)
+		default:
+			// Начало слова: поднимаем регистр и забираем строчный хвост.
+			if isASCIILower(c) {
+				c -= 'a' - 'A'
+			}
+			b = append(b, c)
+			for ; i+1 < len(s) && isASCIILower(s[i+1]); i++ {
+				b = append(b, s[i+1])
+			}
+		}
+	}
+	return string(b)
+}
+
+func isASCIILower(c byte) bool { return 'a' <= c && c <= 'z' }
+func isASCIIDigit(c byte) bool { return '0' <= c && c <= '9' }

@@ -23,7 +23,7 @@ import (
 
 // Server реализует {{.Svc.Name}}.
 type Server struct {
-	{{.Svc.Alias}}.Unimplemented{{.Svc.Name}}Server
+	{{.Svc.Alias}}.Unimplemented{{.Svc.GoName}}Server
 
 	svc *service.Service
 }
@@ -94,16 +94,16 @@ func render(t *template.Template, d handlerData) ([]byte, error) {
 // Имена стрим-типов совпадают с алиасами, которые генерирует
 // protoc-gen-go-grpc: <Service>_<RPC>Server.
 func signature(svc Service, rpc RPC) string {
-	stream := fmt.Sprintf("%s.%s_%sServer", svc.Alias, svc.Name, rpc.Name)
+	stream := fmt.Sprintf("%s.%s_%sServer", svc.Alias, svc.GoName, rpc.GoName)
 	switch {
 	case rpc.StreamRequest:
 		// клиентский и двунаправленный стриминг: только поток.
-		return fmt.Sprintf("func (s *Server) %s(stream %s) error", rpc.Name, stream)
+		return fmt.Sprintf("func (s *Server) %s(stream %s) error", rpc.GoName, stream)
 	case rpc.StreamResponse:
-		return fmt.Sprintf("func (s *Server) %s(req *%s.%s, stream %s) error", rpc.Name, svc.Alias, rpc.Request, stream)
+		return fmt.Sprintf("func (s *Server) %s(req *%s.%s, stream %s) error", rpc.GoName, svc.Alias, rpc.GoRequest, stream)
 	default:
 		return fmt.Sprintf("func (s *Server) %s(ctx context.Context, req *%s.%s) (*%s.%s, error)",
-			rpc.Name, svc.Alias, rpc.Request, svc.Alias, rpc.Response)
+			rpc.GoName, svc.Alias, rpc.GoRequest, svc.Alias, rpc.GoResponse)
 	}
 }
 

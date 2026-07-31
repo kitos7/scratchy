@@ -12,6 +12,10 @@ import (
 // ManifestName — имя манифеста в корне сгенерированного проекта.
 const ManifestName = ".scratch.yaml"
 
+// currentSchema — версия формата манифеста, которую понимает этот бинарник.
+// Поднимается при несовместимом изменении структуры Manifest.
+const currentSchema = 1
+
 // Manifest фиксирует версию шаблонов и параметры генерации —
 // на нём строится `scratch update`.
 type Manifest struct {
@@ -35,7 +39,7 @@ type ManifestParams struct {
 // NewManifest создаёт манифест из параметров генерации.
 func NewManifest(p Params) *Manifest {
 	return &Manifest{
-		Schema:         1,
+		Schema:         currentSchema,
 		ScratchVersion: p.ScratchVersion,
 		Params: ManifestParams{
 			Module:      p.Module,
@@ -91,6 +95,12 @@ func LoadManifest(dir string) (*Manifest, error) {
 	var m Manifest
 	if err := yaml.Unmarshal(data, &m); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", ManifestName, err)
+	}
+	// Манифест писал другой бинарник, и формат мог измениться несовместимо:
+	// лучше сказать это прямо, чем молча отработать по чужой структуре.
+	if m.Schema > currentSchema {
+		return nil, fmt.Errorf("%s имеет schema %d, а этот scratch понимает %d — обнови scratch",
+			ManifestName, m.Schema, currentSchema)
 	}
 	if m.Managed == nil {
 		m.Managed = map[string]string{}
