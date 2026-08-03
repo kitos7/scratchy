@@ -31,12 +31,18 @@ pkg/                   платформенная либа — её импорт
   tracing/             OTel: OTLP-экспортер, сэмплинг, W3C-пропагация
   metrics/             OTel-метрики → Prometheus-registry, который отдаёт /metrics
   grpcmw/              интерсепторы: recovery и логирование, unary и stream
+  httpmw/              middleware gateway: CORS с ответом на preflight
   debug/               debug-сервер: swagger (host → HTTP-порт), metrics, healthz, pprof
 ```
 
 `app.App` расширяется опциями: `WithUnaryInterceptors` / `WithStreamInterceptors`
 для gRPC, `WithGatewayOptions` (`runtime.ServeMuxOption`: маппинг заголовков,
 обработчик ошибок) и `WithHTTPMiddleware` для gateway.
+
+CORS выключен, пока не задан `CORS_ALLOWED_ORIGINS` — если заголовки ставит
+ingress, вторые от сервиса сломают ответ браузеру. Исключение одно: когда
+Swagger отдаётся, origin его debug-порта разрешается сам, иначе Try it out
+(UI на debug-порту → запрос на публичный) блокируется браузером.
 
 Обновление устроено гибридно: общий рантайм живёт в `pkg/` и обновляется через версию модуля в go.mod, а «тонкий» сгенерированный каркас почти не требует обновлений. Managed-файлы тулинга (Makefile, buf.*, .golangci.yml, .mockery.yaml, Dockerfile, docker-compose.yml, CI, .gitignore) обновляет `scratch update`: неизменённые перезаписывает, изменённые руками не трогает — кладёт новую версию рядом (`*.scratch-new`). Код приложения (`cmd/`, `internal/`, `api/`) не трогается никогда. Параметры и хэши — в `.scratch.yaml`.
 

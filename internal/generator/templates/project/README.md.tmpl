@@ -23,7 +23,19 @@ make up          # docker-compose: приложение + jaeger
 | 8081 | Debug: Swagger UI, /metrics, /healthz, /readyz, /debug/pprof | http://localhost:8081/swagger/ |
 | 16686 | Jaeger UI (трейсы) | http://localhost:16686 |
 
-Swagger UI живёт на debug-порте (8081), а запросы «Try it out» шлёт на публичный HTTP-порт — в docker-compose это порт 80 (`SWAGGER_TARGET_HOST=localhost`), при локальном `make run` — `localhost:8080`.
+Swagger UI живёт на debug-порте (8081), а запросы «Try it out» шлёт на публичный HTTP-порт — в docker-compose это порт 80 (`SWAGGER_TARGET_HOST=localhost`), при локальном `make run` — `localhost:8080`. Это кросс-доменные запросы, поэтому origin debug-порта разрешается автоматически, пока Swagger включён.
+
+## CORS
+
+Для своего фронтенда перечисли origin в `CORS_ALLOWED_ORIGINS` (через запятую, точное совпадение схемы, хоста и порта):
+
+```
+CORS_ALLOWED_ORIGINS=https://app.example.com
+CORS_ALLOW_CREDENTIALS=true   # куки и Authorization; с "*" игнорируется
+CORS_MAX_AGE=10m              # сколько браузер кеширует preflight
+```
+
+Пока переменная пуста, CORS выключен — это осознанно. Если заголовки уже ставит ingress, вторые от сервиса сломают ответ: два `Access-Control-Allow-Origin` браузер не принимает. Включай CORS в одном месте.
 
 ## Структура
 

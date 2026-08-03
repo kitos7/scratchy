@@ -24,6 +24,7 @@ type App struct {
 	Tracing Tracing
 	Metrics Metrics
 	Swagger Swagger
+	CORS    CORS
 }
 
 // Log — настройки логирования.
@@ -49,6 +50,25 @@ type Tracing struct {
 type Metrics struct {
 	Enabled bool `env:"METRICS_ENABLED" envDefault:"true"`
 }
+
+// CORS — кросс-доменный доступ к HTTP-gateway.
+//
+// По умолчанию выключен: список origin пуст. Это осознанно — если заголовки
+// уже ставит ingress, вторые от сервиса сломают браузеру ответ (два
+// Access-Control-Allow-Origin недопустимы). Включай CORS в одном месте.
+type CORS struct {
+	// AllowedOrigins — точные origin вида https://app.example.com
+	// (схема, хост и порт должны совпадать). "*" разрешает любой.
+	AllowedOrigins []string `env:"CORS_ALLOWED_ORIGINS" envSeparator:","`
+	// AllowCredentials разрешает куки и Authorization в кросс-доменных
+	// запросах. С "*" игнорируется: браузер отвергает такую комбинацию.
+	AllowCredentials bool `env:"CORS_ALLOW_CREDENTIALS" envDefault:"false"`
+	// MaxAge — насколько браузеру можно кешировать результат preflight.
+	MaxAge time.Duration `env:"CORS_MAX_AGE" envDefault:"10m"`
+}
+
+// Enabled сообщает, настроен ли CORS хоть для одного origin.
+func (c CORS) Enabled() bool { return len(c.AllowedOrigins) > 0 }
 
 // Swagger — настройки Swagger UI на debug-порте.
 type Swagger struct {

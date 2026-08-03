@@ -286,6 +286,85 @@ func TestSwaggerServedOnDebugPort(t *testing.T) {
 	}
 }
 
+// preflight отправляет предварительный запрос на gateway от имени origin.
+func preflight(t *testing.T, httpPort int, origin string) *http.Response {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodOptions, fmt.Sprintf("http://127.0.0.1:%d/v1/echo", httpPort), nil)
+	if err != nil {
+		t.Fatalf("собрать запрос: %v", err)
+	}
+	req.Header.Set("Origin", origin)
+	req.Header.Set("Access-Control-Request-Method", "POST")
+	req.Header.Set("Access-Control-Request-Headers", "content-type")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("preflight: %v", err)
+	}
+	t.Cleanup(func() { _ = resp.Body.Close() })
+	return resp
+}
+
+// Swagger UI живёт на debug-порту, а Try it out бьёт в публичный HTTP-порт —
+// это кросс-доменный запрос. Без разрешения браузер его не пропускает,
+// то есть заявленная в README фича не работает.
+func TestSwaggerOriginAllowedForTryItOut(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.Swagger = config.Swagger{Enabled: true}
+
+	runApp(t, cfg, app.WithSwagger([]byte(`{"swagger":"2.0","info":{"title":"t"},"paths":{}}`)))
+
+	origin := fmt.Sprintf("http://localhost:%d", cfg.DebugPort)
+	resp := preflight(t, cfg.HTTPPort, origin)
+
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("preflight = %d, want 204 (501 означает, что запрос дошёл до gateway)", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != origin {
+		t.Errorf("Allow-Origin = %q, want %q — Try it out будет заблокирован", got, origin)
+	}
+}
+
+// Без CORS в конфиге и без Swagger посторонний origin разрешения не получает.
+func TestCORSDisabledByDefault(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.Swagger = config.Swagger{Enabled: false}
+
+	runApp(t, cfg)
+
+	resp := preflight(t, cfg.HTTPPort, "https://evil.example")
+
+	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("Allow-Origin = %q при выключенном CORS", got)
+	}
+	// Middleware не подключён вовсе — на OPTIONS отвечает сам gateway.
+	if resp.StatusCode == http.StatusNoContent {
+		t.Error("CORS-middleware подключён, хотя origin не настроен ни один")
+	}
+}
+
+// Настроенный origin работает и без Swagger.
+func TestCORSFromConfig(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.Swagger = config.Swagger{Enabled: false}
+	cfg.CORS = config.CORS{
+		AllowedOrigins: []string{"https://app.example.com"},
+		MaxAge:         10 * time.Minute,
+	}
+
+	runApp(t, cfg)
+
+	resp := preflight(t, cfg.HTTPPort, "https://app.example.com")
+
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("preflight = %d, want 204", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "https://app.example.com" {
+		t.Errorf("Allow-Origin = %q", got)
+	}
+}
+
 // Спека не передана — swagger-ручек нет, даже если он включён в конфиге.
 func TestSwaggerAbsentWithoutSpec(t *testing.T) {
 	cfg := testConfig(t)

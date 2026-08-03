@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ func clearEnv(t *testing.T) {
 		"SHUTDOWN_TIMEOUT", "LOG_LEVEL", "LOG_FORMAT",
 		"TRACING_ENABLED", "TRACING_ENDPOINT", "TRACING_INSECURE", "TRACING_SAMPLE_RATIO",
 		"METRICS_ENABLED", "SWAGGER_ENABLED", "SWAGGER_TARGET_HOST", "GREETING",
+		"CORS_ALLOWED_ORIGINS", "CORS_ALLOW_CREDENTIALS", "CORS_MAX_AGE",
 	} {
 		t.Setenv(k, "")
 		if err := os.Unsetenv(k); err != nil {
@@ -62,6 +64,45 @@ func TestLoad_Defaults(t *testing.T) {
 	// Пустой TargetHost — сигнал «подставь localhost:<HTTP_PORT>» в pkg/app.
 	if cfg.Swagger.TargetHost != "" {
 		t.Errorf("Swagger.TargetHost = %q, want пусто", cfg.Swagger.TargetHost)
+	}
+
+	// CORS по умолчанию выключен: сервис за ingress не должен дублировать
+	// заголовки, которые тот уже поставил.
+	if cfg.CORS.Enabled() {
+		t.Errorf("CORS включён по умолчанию: %+v", cfg.CORS)
+	}
+	if cfg.CORS.AllowCredentials {
+		t.Error("AllowCredentials по умолчанию должен быть false")
+	}
+	if cfg.CORS.MaxAge != 10*time.Minute {
+		t.Errorf("CORS.MaxAge = %v, want 10m", cfg.CORS.MaxAge)
+	}
+}
+
+func TestLoad_CORSFromEnv(t *testing.T) {
+	clearEnv(t)
+
+	t.Setenv("CORS_ALLOWED_ORIGINS", "https://app.example.com,https://admin.example.com")
+	t.Setenv("CORS_ALLOW_CREDENTIALS", "true")
+	t.Setenv("CORS_MAX_AGE", "30s")
+
+	cfg, err := config.Load[config.App]()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	want := []string{"https://app.example.com", "https://admin.example.com"}
+	if !slices.Equal(cfg.CORS.AllowedOrigins, want) {
+		t.Errorf("AllowedOrigins = %v, want %v", cfg.CORS.AllowedOrigins, want)
+	}
+	if !cfg.CORS.Enabled() {
+		t.Error("CORS должен считаться включённым")
+	}
+	if !cfg.CORS.AllowCredentials {
+		t.Error("AllowCredentials не применился")
+	}
+	if cfg.CORS.MaxAge != 30*time.Second {
+		t.Errorf("MaxAge = %v, want 30s", cfg.CORS.MaxAge)
 	}
 }
 

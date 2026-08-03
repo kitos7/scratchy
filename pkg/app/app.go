@@ -25,6 +25,7 @@ import (
 	"github.com/kitos7/scratchy/pkg/config"
 	"github.com/kitos7/scratchy/pkg/debug"
 	"github.com/kitos7/scratchy/pkg/grpcmw"
+	"github.com/kitos7/scratchy/pkg/httpmw"
 )
 
 // GRPCRegistrar регистрирует gRPC-сервисы на сервере.
@@ -57,6 +58,27 @@ func New(cfg config.App, log *slog.Logger, opts ...Option) *App {
 		o(a)
 	}
 	return a
+}
+
+// corsConfig возвращает настройки CORS с поправкой на Swagger: его UI живёт
+// на debug-порту, а запросы Try it out уходят на публичный HTTP-порт — это
+// кросс-доменные запросы, и без разрешения браузер их не пропустит.
+// Debug-порт открыт только внутри, поэтому разрешать его безопасно.
+func (a *App) corsConfig(swaggerServed bool) config.CORS {
+	cors := a.cfg.CORS
+	if !swaggerServed {
+		return cors
+	}
+
+	// Отдельный слайс: append не должен задеть массив из конфигурации.
+	origins := make([]string, 0, len(cors.AllowedOrigins)+2)
+	origins = append(origins, cors.AllowedOrigins...)
+	origins = append(origins,
+		fmt.Sprintf("http://localhost:%d", a.cfg.DebugPort),
+		fmt.Sprintf("http://127.0.0.1:%d", a.cfg.DebugPort),
+	)
+	cors.AllowedOrigins = origins
+	return cors
 }
 
 // Run запускает все серверы и блокируется до сигнала остановки или ошибки.
@@ -108,11 +130,24 @@ func (a *App) Run(ctx context.Context) error {
 		}
 	}
 
+	// Спека нужна раньше gateway: от того, отдаётся ли Swagger, зависит
+	// список origin для CORS.
+	var swaggerJSON []byte
+	if a.cfg.Swagger.Enabled {
+		swaggerJSON = a.swaggerJSON
+	}
+
 	// Middleware внутри otelhttp: спан уже создан, значит логи из middleware
-	// получают trace_id. Первый добавленный — самый внешний.
+	// получают trace_id. Первый в списке — самый внешний.
+	middleware := a.httpMiddleware
+	if cors := a.corsConfig(swaggerJSON != nil); cors.Enabled() {
+		// CORS впереди пользовательских: preflight не должен зависеть от них.
+		middleware = append([]func(http.Handler) http.Handler{httpmw.CORS(cors)}, middleware...)
+	}
+
 	var gatewayHandler http.Handler = gatewayMux
-	for i := len(a.httpMiddleware) - 1; i >= 0; i-- {
-		gatewayHandler = a.httpMiddleware[i](gatewayHandler)
+	for i := len(middleware) - 1; i >= 0; i-- {
+		gatewayHandler = middleware[i](gatewayHandler)
 	}
 
 	httpServer := &http.Server{
@@ -125,10 +160,6 @@ func (a *App) Run(ctx context.Context) error {
 	swaggerTarget := a.cfg.Swagger.TargetHost
 	if swaggerTarget == "" {
 		swaggerTarget = fmt.Sprintf("localhost:%d", a.cfg.HTTPPort)
-	}
-	var swaggerJSON []byte
-	if a.cfg.Swagger.Enabled {
-		swaggerJSON = a.swaggerJSON
 	}
 	debugServer := debug.New(a.cfg.DebugPort, debug.Options{
 		SwaggerJSON: swaggerJSON,
