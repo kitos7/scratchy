@@ -6,6 +6,16 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 BIN_DIR := $(CURDIR)/bin
 GOLANGCI_LINT_VERSION := v2.12.2
 
+# Демо-проект для проверки шаблонов и либы «как есть» — без тега и пуша:
+# в его go.mod прописывается replace на этот каталог, поэтому правки в pkg/
+# видны сразу, достаточно пересобрать сам демо-проект.
+DEMO_DIR    ?= $(CURDIR)/.demo
+DEMO_MODULE ?= github.com/acme/demo
+
+# Каталоги с Go-кодом самого scratchy: gofmt, в отличие от go build,
+# заходит и во вложенные модули, а в DEMO_DIR лежит чужой проект.
+GO_DIRS := cmd internal pkg
+
 .PHONY: build
 build: ## Собрать бинарник scratch в ./bin
 	go build -ldflags '$(LDFLAGS)' -o $(BIN_DIR)/scratch ./cmd/scratch
@@ -13,6 +23,17 @@ build: ## Собрать бинарник scratch в ./bin
 .PHONY: install
 install: ## Установить scratch в GOBIN
 	go install -ldflags '$(LDFLAGS)' ./cmd/scratch
+
+.PHONY: demo
+demo: build ## Сгенерировать проект из текущего кода в ./.demo (DEMO_DIR, DEMO_MODULE)
+	@test -n "$(DEMO_DIR)" || { echo "DEMO_DIR пуст"; exit 1; }
+	@if [ -d "$(DEMO_DIR)" ] && [ -n "$$(ls -A '$(DEMO_DIR)')" ] && [ ! -f "$(DEMO_DIR)/.scratch.yaml" ]; then \
+		echo "$(DEMO_DIR) не пуст и не похож на проект scratch (нет .scratch.yaml)."; \
+		echo "Удали его сам или задай другой каталог: make demo DEMO_DIR=/путь"; \
+		exit 1; \
+	fi
+	rm -rf "$(DEMO_DIR)"
+	$(BIN_DIR)/scratch new $(DEMO_MODULE) --dir "$(DEMO_DIR)" --lib-replace "$(CURDIR)"
 
 .PHONY: test
 test: ## Юнит-тесты
@@ -34,7 +55,7 @@ lint: $(BIN_DIR)/golangci-lint ## Линтер
 
 .PHONY: fmt-check
 fmt-check: ## Проверить форматирование
-	@out="$$(gofmt -l .)"; \
+	@out="$$(gofmt -l $(GO_DIRS))"; \
 	if [ -n "$$out" ]; then echo "gofmt требуется в:"; echo "$$out"; exit 1; fi
 
 .PHONY: check
