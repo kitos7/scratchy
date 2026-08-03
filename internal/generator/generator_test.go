@@ -6,8 +6,10 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -193,6 +195,9 @@ func TestRender_AllTemplates(t *testing.T) {
 		"api/proto/google/api/annotations.proto",
 		"api/proto/google/api/http.proto",
 		"gen/embed.go",
+		// Заглушка пакета: без неё bare `go mod tidy` до buf generate уходит
+		// искать <module>/gen/<pkg>/v1 в сети.
+		"gen/demoapi/v1/doc.go",
 		"cmd/demo-api/main.go",
 		"internal/config/config.go",
 		"internal/di/wire.go",
@@ -292,6 +297,56 @@ func TestRender_GoFilesAreValid(t *testing.T) {
 
 	if checked == 0 {
 		t.Fatal("не проверено ни одного .go — тест ничего не гарантирует")
+	}
+}
+
+// TestRender_LocalImportsResolve: каждый импорт своего же модуля должен
+// указывать на каталог, который в свежесгенерированном проекте существует.
+// Иначе `go mod tidy` (его запускает и иде, и шаг make generate) уходит
+// искать пакет в сети и падает с «cannot find module providing package».
+// Так уже дважды ломались internal/mocks и gen/<pkg>/v1 — оба закрыты
+// файлами-заглушками, объявляющими пакет до кодогенерации.
+func TestRender_LocalImportsResolve(t *testing.T) {
+	p := testParams(t)
+	files, err := Render(p)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+
+	// Каталоги, которые есть в отрендеренном проекте.
+	dirs := map[string]bool{}
+	for rel := range files {
+		for d := path.Dir(rel); d != "." && d != "/"; d = path.Dir(d) {
+			dirs[d] = true
+		}
+	}
+
+	fset := token.NewFileSet()
+	checked := 0
+	for rel, content := range files {
+		if !strings.HasSuffix(rel, ".go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, rel, content, parser.ImportsOnly)
+		if err != nil {
+			t.Errorf("%s: %v", rel, err)
+			continue
+		}
+		for _, imp := range f.Imports {
+			target, err := strconv.Unquote(imp.Path.Value)
+			if err != nil || !strings.HasPrefix(target, p.Module+"/") {
+				continue
+			}
+			checked++
+			if pkgDir := strings.TrimPrefix(target, p.Module+"/"); !dirs[pkgDir] {
+				t.Errorf("%s импортирует %s, но каталога %s в сгенерированном проекте нет — нужна заглушка пакета",
+					rel, target, pkgDir)
+			}
+		}
+	}
+
+	if checked == 0 {
+		t.Fatal("не проверено ни одного внутреннего импорта — тест ничего не гарантирует")
 	}
 }
 
