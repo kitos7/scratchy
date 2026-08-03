@@ -25,15 +25,24 @@ install: ## Установить scratch в GOBIN
 	go install -ldflags '$(LDFLAGS)' ./cmd/scratch
 
 .PHONY: demo
-demo: build ## Сгенерировать проект из текущего кода в ./.demo (DEMO_DIR, DEMO_MODULE)
+demo: build ## Сгенерировать проект из текущего кода в ./.demo (DEMO_DIR, DEMO_MODULE, FORCE=1)
 	@test -n "$(DEMO_DIR)" || { echo "DEMO_DIR пуст"; exit 1; }
-	@if [ -d "$(DEMO_DIR)" ] && [ -n "$$(ls -A '$(DEMO_DIR)')" ] && [ ! -f "$(DEMO_DIR)/.scratch.yaml" ]; then \
-		echo "$(DEMO_DIR) не пуст и не похож на проект scratch (нет .scratch.yaml)."; \
-		echo "Удали его сам или задай другой каталог: make demo DEMO_DIR=/путь"; \
-		exit 1; \
+	@if [ -d "$(DEMO_DIR)" ] && [ -n "$$(ls -A '$(DEMO_DIR)')" ]; then \
+		if [ ! -f "$(DEMO_DIR)/.scratch.yaml" ]; then \
+			echo "$(DEMO_DIR) не пуст и не похож на проект scratch (нет .scratch.yaml)."; \
+			echo "Задай другой каталог: make demo DEMO_DIR=/путь"; \
+			exit 1; \
+		fi; \
+		if [ -z "$(FORCE)" ]; then \
+			echo "В $(DEMO_DIR) уже есть проект scratch — не перезаписываю, чтобы не потерять правки."; \
+			echo "Поверх существующего:  make demo FORCE=1"; \
+			echo "С чистого листа:       rm -rf $(DEMO_DIR) && make demo"; \
+			exit 1; \
+		fi; \
 	fi
-	rm -rf "$(DEMO_DIR)"
-	$(BIN_DIR)/scratch new $(DEMO_MODULE) --dir "$(DEMO_DIR)" --lib-replace "$(CURDIR)"
+	# Именно --force, без rm -rf: каталог не пересоздаётся, поэтому не ломается
+	# cwd у открытого шелла и иде, а файлы вне шаблонов остаются на месте.
+	$(BIN_DIR)/scratch new $(DEMO_MODULE) --dir "$(DEMO_DIR)" --lib-replace "$(CURDIR)" --force
 
 .PHONY: test
 test: ## Юнит-тесты
