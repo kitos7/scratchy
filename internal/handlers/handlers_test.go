@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nikita/scratch/internal/generator"
+	"github.com/kitos7/scratchy/internal/generator"
 )
 
 // extraProto — второй сервис в том же контракте: unary, оба вида стриминга

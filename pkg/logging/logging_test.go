@@ -10,7 +10,7 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/nikita/scratch/pkg/config"
+	"github.com/kitos7/scratchy/pkg/config"
 )
 
 // ctxWithSpan собирает контекст с валидным span context, не поднимая

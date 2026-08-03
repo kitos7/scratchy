@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nikita/scratch/internal/handlers"
+	"github.com/kitos7/scratchy/internal/handlers"
 )
 
 func handlersCmd() *cobra.Command {

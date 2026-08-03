@@ -22,4 +22,4 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/nikita/scratch
+        - github.com/kitos7/scratchy

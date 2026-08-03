@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nikita/scratch/internal/generator"
+	"github.com/kitos7/scratchy/internal/generator"
 )
 
 func newCmd(version string) *cobra.Command {

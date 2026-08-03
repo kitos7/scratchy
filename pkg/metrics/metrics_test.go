@@ -9,8 +9,8 @@ import (
 	"go.opentelemetry.io/otel"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 
-	"github.com/nikita/scratch/pkg/config"
-	"github.com/nikita/scratch/pkg/metrics"
+	"github.com/kitos7/scratchy/pkg/config"
+	"github.com/kitos7/scratchy/pkg/metrics"
 )
 
 func TestInit_DisabledReturnsNoopShutdown(t *testing.T) {

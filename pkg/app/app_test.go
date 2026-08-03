@@ -17,8 +17,8 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/nikita/scratch/pkg/app"
-	"github.com/nikita/scratch/pkg/config"
+	"github.com/kitos7/scratchy/pkg/app"
+	"github.com/kitos7/scratchy/pkg/config"
 )
 
 // freePort занимает порт на :0 и сразу отпускает. Гонка теоретически

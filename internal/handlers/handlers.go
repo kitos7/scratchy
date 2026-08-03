@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/nikita/scratch/internal/generator"
+	"github.com/kitos7/scratchy/internal/generator"
 )
 
 // serverDir — корень транспорта в сгенерированном проекте.

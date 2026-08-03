@@ -14,8 +14,8 @@ import (
 	otelprom "go.opentelemetry.io/otel/exporters/prometheus"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 
-	"github.com/nikita/scratch/internal/otelres"
-	"github.com/nikita/scratch/pkg/config"
+	"github.com/kitos7/scratchy/internal/otelres"
+	"github.com/kitos7/scratchy/pkg/config"
 )
 
 // ShutdownFunc останавливает провайдер метрик.

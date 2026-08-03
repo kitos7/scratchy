@@ -9,8 +9,8 @@ import (
 	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
-	"github.com/nikita/scratch/pkg/config"
-	"github.com/nikita/scratch/pkg/tracing"
+	"github.com/kitos7/scratchy/pkg/config"
+	"github.com/kitos7/scratchy/pkg/tracing"
 )
 
 // Пропагация нужна всегда: даже с выключенной трассировкой сервис обязан

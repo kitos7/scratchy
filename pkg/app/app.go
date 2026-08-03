@@ -22,9 +22,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/nikita/scratch/pkg/config"
-	"github.com/nikita/scratch/pkg/debug"
-	"github.com/nikita/scratch/pkg/grpcmw"
+	"github.com/kitos7/scratchy/pkg/config"
+	"github.com/kitos7/scratchy/pkg/debug"
+	"github.com/kitos7/scratchy/pkg/grpcmw"
 )
 
 // GRPCRegistrar регистрирует gRPC-сервисы на сервере.

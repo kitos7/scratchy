@@ -11,8 +11,8 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
-	"github.com/nikita/scratch/internal/otelres"
-	"github.com/nikita/scratch/pkg/config"
+	"github.com/kitos7/scratchy/internal/otelres"
+	"github.com/kitos7/scratchy/pkg/config"
 )
 
 // ShutdownFunc останавливает провайдер трассировки, сбрасывая буферы.

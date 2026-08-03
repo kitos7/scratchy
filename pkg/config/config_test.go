@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nikita/scratch/pkg/config"
+	"github.com/kitos7/scratchy/pkg/config"
 )
 
 // clearEnv снимает все переменные, которые читает config.App: иначе

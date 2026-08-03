@@ -11,7 +11,7 @@ import (
 
 	protoparse "github.com/emicklei/proto"
 
-	"github.com/nikita/scratch/internal/generator"
+	"github.com/kitos7/scratchy/internal/generator"
 )
 
 // Service — proto-сервис, найденный в контрактах проекта.

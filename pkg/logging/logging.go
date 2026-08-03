@@ -12,7 +12,7 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/nikita/scratch/pkg/config"
+	"github.com/kitos7/scratchy/pkg/config"
 )
 
 // New создаёт логгер по конфигурации, пишет в stdout и устанавливает

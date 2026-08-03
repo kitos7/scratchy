@@ -6,7 +6,7 @@ import (
 	"os"
 	"runtime/debug"
 
-	"github.com/nikita/scratch/internal/cli"
+	"github.com/kitos7/scratchy/internal/cli"
 )
 
 // version проставляется при сборке: -ldflags "-X main.version=v0.1.0".

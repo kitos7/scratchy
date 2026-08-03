@@ -1,4 +1,4 @@
-module github.com/nikita/scratch
+module github.com/kitos7/scratchy
 
 go 1.24
 

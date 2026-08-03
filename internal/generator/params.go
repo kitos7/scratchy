@@ -11,7 +11,7 @@ import (
 
 // ScratchModule — module path платформенной либы, которую импортируют
 // сгенерированные проекты.
-const ScratchModule = "github.com/nikita/scratch"
+const ScratchModule = "github.com/kitos7/scratchy"
 
 // placeholderVersion используется в require, пока scratch не имеет
 // semver-релиза (сборка dev) — тогда обязателен replace.

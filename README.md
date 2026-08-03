@@ -43,7 +43,7 @@ pkg/                   платформенная либа — её импорт
 ## Использование
 
 ```bash
-make install          # или: go install github.com/nikita/scratch/cmd/scratch@latest (после публикации)
+make install          # или: go install github.com/kitos7/scratchy/cmd/scratch@latest (после публикации)
 
 scratch new github.com/acme/billing
 cd billing
@@ -52,7 +52,7 @@ make test build
 make up               # docker-compose: сервис + jaeger
 ```
 
-Пока либа не опубликована (module path — placeholder `github.com/nikita/scratch`), генерируй с replace на локальную копию: `scratch new github.com/acme/demo --lib-replace /путь/к/go-scratch`.
+Пока либа не опубликована (module path — placeholder `github.com/kitos7/scratchy`), генерируй с replace на локальную копию: `scratch new github.com/acme/demo --lib-replace /путь/к/go-scratch`.
 
 ## Версионирование и релизы
 
@@ -75,7 +75,7 @@ make e2e     # сквозной прогон: сгенерированный п�
 
 `make check` — то, что дал бы CI; пока у репозитория нет remote, это единственный гейт. `make e2e` генерирует проект во временную директорию и проходит по нему `bootstrap → generate → test → build`: только он проверяет связку buf + wire + mockery + `scratch handlers` целиком.
 
-Перед публикацией замени module path `github.com/nikita/scratch` на реальный (go.mod, импорты, `internal/generator/params.go: ScratchModule`).
+Перед публикацией замени module path `github.com/kitos7/scratchy` на реальный (go.mod, импорты, `internal/generator/params.go: ScratchModule`).
 
 ## Разработка
 
