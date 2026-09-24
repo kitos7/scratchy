@@ -49,6 +49,7 @@ type App struct {
 
 	gatewayOpts    []runtime.ServeMuxOption
 	httpMiddleware []func(http.Handler) http.Handler
+	debugHandlers  map[string]http.Handler
 }
 
 // New собирает приложение из конфигурации и опций.
@@ -165,6 +166,7 @@ func (a *App) Run(ctx context.Context) error {
 		SwaggerJSON: swaggerJSON,
 		Title:       a.cfg.Name,
 		TargetHost:  swaggerTarget,
+		Handlers:    a.debugHandlers,
 	})
 
 	g, gctx := errgroup.WithContext(ctx)

@@ -49,3 +49,15 @@ func WithGatewayOptions(opts ...runtime.ServeMuxOption) Option {
 func WithHTTPMiddleware(mw ...func(http.Handler) http.Handler) Option {
 	return func(a *App) { a.httpMiddleware = append(a.httpMiddleware, mw...) }
 }
+
+// WithDebugHandler монтирует дополнительный хендлер на debug-порте
+// (например, встраиваемую админку). Авторизации нет: debug-порт наружу
+// не публикуется.
+func WithDebugHandler(pattern string, h http.Handler) Option {
+	return func(a *App) {
+		if a.debugHandlers == nil {
+			a.debugHandlers = make(map[string]http.Handler)
+		}
+		a.debugHandlers[pattern] = h
+	}
+}

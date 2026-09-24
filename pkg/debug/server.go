@@ -21,6 +21,10 @@ type Options struct {
 	Title string
 	// TargetHost — host[:port], куда Swagger UI шлёт запросы Try it out.
 	TargetHost string
+	// Handlers — дополнительные хендлеры на debug-порте (pattern → handler),
+	// например встраиваемые админки. Без авторизации: debug-порт наружу
+	// не публикуется.
+	Handlers map[string]http.Handler
 }
 
 // Server — debug-сервер.
@@ -54,6 +58,10 @@ func New(port int, opts Options) *Server {
 	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
 	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
+	for pattern, h := range opts.Handlers {
+		mux.Handle(pattern, h)
+	}
 
 	if opts.SwaggerJSON != nil {
 		spec := patchSwagger(opts.SwaggerJSON, opts.TargetHost, opts.Title)
