@@ -38,7 +38,7 @@ func Generate(dir string) (*Report, error) {
 		return nil, err
 	}
 
-	services, err := parseServices(dir, manifest.Params.Package)
+	services, err := parseServices(dir)
 	if err != nil {
 		return nil, err
 	}

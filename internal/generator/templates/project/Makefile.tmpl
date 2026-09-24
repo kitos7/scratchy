@@ -44,7 +44,7 @@ bootstrap: ## Установить инструменты кодогенерац
 
 .PHONY: generate
 generate: ## Кодогенерация: proto → grpc/gateway/swagger, ручки, зависимости, моки, wire
-	$(BIN_DIR)/buf generate --path api/proto/[[.Package]]
+	$(BIN_DIR)/buf generate
 	$(MAKE) handlers
 	go mod tidy
 	$(BIN_DIR)/mockery

@@ -94,6 +94,62 @@ func TestGenerate_NewService(t *testing.T) {
 	}
 }
 
+// separateProto — сервис в отдельном proto-пакете (api/proto/audit), не в том,
+// что задан при скаффолдинге: такие контракты тоже должны попадать в генерацию.
+const separateProto = `syntax = "proto3";
+
+package audit.v1;
+
+option go_package = "github.com/acme/demo/gen/audit/v1;auditv1";
+
+service AuditService {
+  rpc Log(LogRequest) returns (LogResponse);
+}
+
+message LogRequest { string entry = 1; }
+message LogResponse {}
+`
+
+func TestGenerate_ServiceInSeparatePackage(t *testing.T) {
+	dir := newProject(t)
+
+	protoPath := filepath.Join(dir, "api", "proto", "audit", "v1", "service.proto")
+	if err := os.MkdirAll(filepath.Dir(protoPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(protoPath, []byte(separateProto), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := Generate(dir)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	for _, want := range []string{
+		"internal/server/auditservice/server.go",
+		"internal/server/auditservice/log.go",
+	} {
+		if !slices.Contains(report.Created, want) {
+			t.Errorf("не создан %s (создано: %v)", want, report.Created)
+		}
+	}
+	if !slices.ContainsFunc(report.NewServices, func(s Service) bool { return s.Name == "AuditService" }) {
+		t.Errorf("AuditService не попал в новые сервисы: %+v", report.NewServices)
+	}
+
+	// Пакет нового сервиса ссылается на свой pb-пакет, а не на пакет скелета.
+	server := readFile(t, filepath.Join(dir, "internal", "server", "auditservice", "server.go"))
+	for _, want := range []string{
+		"github.com/acme/demo/gen/audit/v1",
+		"auditv1.UnimplementedAuditServiceServer",
+	} {
+		if !strings.Contains(server, want) {
+			t.Errorf("server.go: нет %q\n%s", want, server)
+		}
+	}
+}
+
 func TestGenerate_Signatures(t *testing.T) {
 	dir := newProject(t)
 	if _, err := Generate(dir); err != nil {

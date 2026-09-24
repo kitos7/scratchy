@@ -58,12 +58,16 @@ func (r RPC) Streaming() bool { return r.StreamRequest || r.StreamResponse }
 
 // parseServices собирает сервисы из всех proto-контрактов проекта.
 // Вендоренные контракты (api/proto/google/...) пропускаются.
-func parseServices(dir, protoPkg string) ([]Service, error) {
-	root := filepath.Join(dir, "api", "proto", protoPkg)
+func parseServices(dir string) ([]Service, error) {
+	root := filepath.Join(dir, "api", "proto")
+	vendored := filepath.Join(root, "google")
 	var files []string
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		if d.IsDir() && path == vendored {
+			return filepath.SkipDir
 		}
 		if !d.IsDir() && strings.HasSuffix(path, ".proto") {
 			files = append(files, path)

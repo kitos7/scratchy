@@ -49,6 +49,44 @@ func runMake(t *testing.T, dir string, target ...string) {
 	t.Logf("%s — ок за %s", label, time.Since(start).Round(time.Second))
 }
 
+// writeAuditProto кладёт в проект контракт в отдельном proto-пакете —
+// регрессия: до фикса buf generate и scratch handlers видели только
+// api/proto/<package> и молча пропускали остальные сервисы.
+func writeAuditProto(t *testing.T, dir string) {
+	t.Helper()
+
+	const auditProto = `syntax = "proto3";
+
+package audit.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "github.com/acme/e2edemo/gen/audit/v1;auditv1";
+
+service AuditService {
+  rpc Log(LogRequest) returns (LogResponse) {
+    option (google.api.http) = {
+      post: "/v1/audit/log"
+      body: "*"
+    };
+  }
+}
+
+message LogRequest {
+  string entry = 1;
+}
+
+message LogResponse {}
+`
+	path := filepath.Join(dir, "api", "proto", "audit", "v1", "service.proto")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(auditProto), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestE2E_GeneratedProjectBuilds проходит путь пользователя целиком:
 // new → bootstrap → generate → test → build.
 func TestE2E_GeneratedProjectBuilds(t *testing.T) {
@@ -70,6 +108,10 @@ func TestE2E_GeneratedProjectBuilds(t *testing.T) {
 	}
 	t.Logf("сгенерировано %d файлов в %s", len(res.Files), dir)
 
+	// Второй proto-пакет рядом со скелетным: buf и scratch handlers должны
+	// видеть все контракты, а не только пакет, заданный при скаффолдинге.
+	writeAuditProto(t, dir)
+
 	// Порядок как в README: инструменты, кодогенерация, тесты, сборка.
 	runMake(t, dir, "bootstrap")
 	runMake(t, dir, "generate")
@@ -82,6 +124,11 @@ func TestE2E_GeneratedProjectBuilds(t *testing.T) {
 		"gen/e2edemo/v1/service.pb.go",
 		"gen/e2edemo/v1/service_grpc.pb.go",
 		"gen/e2edemo/v1/service.pb.gw.go",
+		"gen/audit/v1/service.pb.go",
+		"gen/audit/v1/service_grpc.pb.go",
+		"gen/audit/v1/service.pb.gw.go",
+		"internal/server/auditservice/server.go",
+		"internal/server/auditservice/log.go",
 		"gen/api.swagger.json",
 		"internal/mocks/Repository.go",
 		"internal/di/wire_gen.go",
@@ -90,6 +137,20 @@ func TestE2E_GeneratedProjectBuilds(t *testing.T) {
 	} {
 		if _, err := os.Stat(filepath.Join(dir, rel)); err != nil {
 			t.Errorf("после make generate/build нет %s: %v", rel, err)
+		}
+	}
+
+	// Объединённый сваггер должен включать оба сервиса: со strategy: directory
+	// buf запускал бы openapiv2 по каталогам и второй api.swagger.json терялся.
+	swagger, err := os.ReadFile(filepath.Join(dir, "gen", "api.swagger.json"))
+	if err != nil {
+		t.Fatalf("читать api.swagger.json: %v", err)
+	}
+	// Имя сервиса скелета — E2Edemo, не E2edemo: GoCamelCase поднимает
+	// букву после цифры (см. комментарий к GoCamelCase).
+	for _, op := range []string{"E2EdemoService_Echo", "AuditService_Log"} {
+		if !strings.Contains(string(swagger), op) {
+			t.Errorf("в api.swagger.json нет операции %s", op)
 		}
 	}
 
